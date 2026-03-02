@@ -1,0 +1,5 @@
+*:*/build/src/grammar.tab.hh
+missingInclude:*test/*
+unusedFunction:include/AST/AST.hpp
+unusedFunction:include/driver/driver.hpp
+unusedFunction:include/driver/location_utils.hpp

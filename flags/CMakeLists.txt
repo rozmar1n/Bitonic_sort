@@ -1,0 +1,39 @@
+add_library(flags INTERFACE)
+
+target_compile_features(flags
+    INTERFACE
+        cxx_std_20
+)
+
+target_compile_options(flags
+    INTERFACE
+        $<$<CXX_COMPILER_ID:MSVC>:
+            /W4
+            /permissive-
+            /EHsc
+        >
+        $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:
+            -Wall
+            -Wextra
+            -Wpedantic
+            -Wshadow
+            -Wconversion
+            -Wsign-conversion
+        >
+        $<$<AND:$<NOT:$<CXX_COMPILER_ID:MSVC>>,$<CONFIG:Debug>>:
+            -O0
+            -g3
+        >
+        $<$<AND:$<NOT:$<CXX_COMPILER_ID:MSVC>>,$<CONFIG:Release>>:
+            -O2
+            -DNDEBUG
+        >
+        $<$<AND:$<CXX_COMPILER_ID:MSVC>,$<CONFIG:Debug>>:
+            /Od
+            /Zi
+        >
+        $<$<AND:$<CXX_COMPILER_ID:MSVC>,$<CONFIG:Release>>:
+            /O2
+            /DNDEBUG
+        >
+)

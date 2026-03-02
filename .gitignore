@@ -1,3 +1,4 @@
 *build
 *.pdf
 *.out
+/.cache/clangd/index
