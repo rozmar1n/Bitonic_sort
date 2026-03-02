@@ -4,8 +4,11 @@ project(BitonicSort LANGUAGES CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-#add_subdirectory(flags)
-#add_subdirectory(src)
+find_package(OpenCL REQUIRED)
+
+add_subdirectory(flags)
+add_subdirectory(src)
+
 
 include(CTest)
 #if(BUILD_TESTING)
