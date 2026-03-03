@@ -1,6 +1,9 @@
 add_executable(bitonic_sort_cli
     main.cpp
     OpenCLProbe.cpp
+    OpenCLRuntime.cpp
+    KernelLoader.cpp
+    OpenCLProgram.cpp
 )
 
 target_include_directories(bitonic_sort_cli
