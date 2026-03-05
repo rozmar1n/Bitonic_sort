@@ -1,20 +1,3 @@
-add_executable(bitonic_sort_cli
-    main.cpp
-    OpenCLProbe.cpp
-    OpenCLRuntime.cpp
-    KernelLoader.cpp
-    OpenCLProgram.cpp
-    OpenCLSmoke.cpp
-    BitonicSort.cpp
-)
-
-target_include_directories(bitonic_sort_cli
-    PRIVATE
-        ${PROJECT_SOURCE_DIR}/include
-)
-
-target_link_libraries(bitonic_sort_cli
-    PRIVATE
-        flags
-        OpenCL::OpenCL
-)
+add_subdirectory(opencl_core)
+add_subdirectory(bitonic_gpu)
+add_subdirectory(apps/bitonic_sort_cli)
