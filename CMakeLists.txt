@@ -11,16 +11,16 @@ add_subdirectory(src)
 
 
 include(CTest)
-#if(BUILD_TESTING)
-#    add_subdirectory(test)
-#endif()
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()
 
 file(GLOB_RECURSE ALL_SOURCE_FILES
     "${CMAKE_SOURCE_DIR}/src/*.cpp"
     "${CMAKE_SOURCE_DIR}/src/*.hpp"
     "${CMAKE_SOURCE_DIR}/include/*.hpp"
-    "${CMAKE_SOURCE_DIR}/test/*.cpp"
-    "${CMAKE_SOURCE_DIR}/test/*.hpp"
+    "${CMAKE_SOURCE_DIR}/tests/*.cpp"
+    "${CMAKE_SOURCE_DIR}/tests/*.hpp"
 )
 
 find_program(CLANG_FORMAT clang-format)
