@@ -2,3 +2,4 @@
 *.pdf
 *.out
 /.cache/clangd/index
+__pycache__/
