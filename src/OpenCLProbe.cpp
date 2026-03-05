@@ -1,4 +1,4 @@
-#include <bitonic_sort/OpenCLProbe.hpp>
+#include <opencl_core/OpenCLProbe.hpp>
 
 namespace bs {
 

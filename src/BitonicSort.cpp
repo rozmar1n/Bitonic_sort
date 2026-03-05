@@ -1,4 +1,4 @@
-#include "bitonic_sort/BitonicSort.hpp"
+#include "bitonic_gpu/BitonicSort.hpp"
 
 #include <limits>
 #include <stdexcept>

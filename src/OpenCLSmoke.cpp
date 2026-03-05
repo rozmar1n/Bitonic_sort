@@ -1,4 +1,4 @@
-#include "bitonic_sort/OpenCLSmoke.hpp"
+#include "opencl_core/OpenCLSmoke.hpp"
 
 namespace bs {
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <bitonic_sort/OpenCLCommon.hpp>
+#include <opencl_core/detail/OpenCLCommon.hpp>
 #include <cstdlib>
 #include <optional>
 #include <string>
@@ -51,4 +51,4 @@ enum class DevicePreference
 OpenCLProbeResult probe_opencl(
     DevicePreference preference = DevicePreference::GPUThenAny);
 
-}
+} // namespace bs

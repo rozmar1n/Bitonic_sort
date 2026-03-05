@@ -1,4 +1,4 @@
-#include "bitonic_sort/OpenCLRuntime.hpp"
+#include "opencl_core/OpenCLRuntime.hpp"
 
 namespace bs {
 

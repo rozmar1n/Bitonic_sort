@@ -1,4 +1,4 @@
-#include "bitonic_sort/KernelLoader.hpp"
+#include "opencl_core/KernelLoader.hpp"
 
 #include <fstream>
 #include <sstream>

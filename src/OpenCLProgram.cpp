@@ -1,4 +1,4 @@
-#include "bitonic_sort/OpenCLProgram.hpp"
+#include "opencl_core/OpenCLProgram.hpp"
 
 namespace bs {
 cl::Program build_program(const OpenCLRuntime& runtime,

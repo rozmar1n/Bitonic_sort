@@ -1,8 +1,8 @@
-#include "bitonic_sort/BitonicSort.hpp"
-#include "bitonic_sort/KernelLoader.hpp"
-#include "bitonic_sort/OpenCLProbe.hpp"
-#include "bitonic_sort/OpenCLProgram.hpp"
-#include "bitonic_sort/OpenCLRuntime.hpp"
+#include "bitonic_gpu/BitonicSort.hpp"
+#include "opencl_core/KernelLoader.hpp"
+#include "opencl_core/OpenCLProbe.hpp"
+#include "opencl_core/OpenCLProgram.hpp"
+#include "opencl_core/OpenCLRuntime.hpp"
 
 #include <algorithm>
 #include <cstddef>

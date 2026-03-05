@@ -1,7 +1,7 @@
 #pragma once
 
-#include <bitonic_sort/OpenCLCommon.hpp>
-#include <bitonic_sort/OpenCLProbe.hpp>
+#include <opencl_core/OpenCLProbe.hpp>
+#include <opencl_core/detail/OpenCLCommon.hpp>
 
 namespace bs {
 
