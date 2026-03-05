@@ -1,9 +1,10 @@
+#include "bitonic_sort/BitonicSort.hpp"
 #include "bitonic_sort/KernelLoader.hpp"
+#include "bitonic_sort/OpenCLProbe.hpp"
 #include "bitonic_sort/OpenCLProgram.hpp"
-#include <bitonic_sort/OpenCLProbe.hpp>
-#include <bitonic_sort/OpenCLRuntime.hpp>
-#include <bitonic_sort/OpenCLSmoke.hpp>
+#include "bitonic_sort/OpenCLRuntime.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <iostream>
 
@@ -25,17 +26,20 @@ int main()
 
         const cl::Program program = bs::build_program(runtime, source);
 
-        const std::vector<int> input = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
-        const std::vector<int> output =
-            bs::run_increment_smoke_test(runtime, program, input);
+        std::vector<int> input = { 5, 4, 3, 2, 1, 2,  3,  4,
+                                   5, 6, 7, 8, 9, 10, 11, 883 };
+
+        std::vector<int> cpu_input(input);
+        auto gpu_sorted = bitonic_sort_opencl(runtime, program, input);
+        std::sort(cpu_input.begin(), cpu_input.end());
 
         for (std::size_t i = 0; i < input.size(); ++i) {
-            if (output[i] != input[i] + 1) {
-                std::cerr << "Smoke test failed at index: " << i << std::endl;
+            if (gpu_sorted[i] != cpu_input[i]) {
+                std::cerr << "Mismatch at index " << i << std::endl;
                 return EXIT_FAILURE;
             }
         }
-
+        std::cout << "Bitonic sort finished successfully" << std::endl;
         std::cout << "Selected platform: " << result.selection->platform_name
                   << std::endl;
         std::cout << "Selected device: " << result.selection->device_name

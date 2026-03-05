@@ -5,6 +5,7 @@ add_executable(bitonic_sort_cli
     KernelLoader.cpp
     OpenCLProgram.cpp
     OpenCLSmoke.cpp
+    BitonicSort.cpp
 )
 
 target_include_directories(bitonic_sort_cli

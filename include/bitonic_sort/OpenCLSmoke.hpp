@@ -1,7 +1,7 @@
 #pragma once
 
-#include <bitonic_sort/OpenCLCommon.hpp>
-#include <bitonic_sort/OpenCLRuntime.hpp>
+#include "bitonic_sort/OpenCLCommon.hpp"
+#include "bitonic_sort/OpenCLRuntime.hpp"
 
 #include <vector>
 
