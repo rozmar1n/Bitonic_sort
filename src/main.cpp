@@ -2,7 +2,9 @@
 #include "bitonic_sort/OpenCLProgram.hpp"
 #include <bitonic_sort/OpenCLProbe.hpp>
 #include <bitonic_sort/OpenCLRuntime.hpp>
+#include <bitonic_sort/OpenCLSmoke.hpp>
 
+#include <cstddef>
 #include <iostream>
 
 int main()
@@ -23,7 +25,16 @@ int main()
 
         const cl::Program program = bs::build_program(runtime, source);
 
-        (void)program;
+        const std::vector<int> input = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
+        const std::vector<int> output =
+            bs::run_increment_smoke_test(runtime, program, input);
+
+        for (std::size_t i = 0; i < input.size(); ++i) {
+            if (output[i] != input[i] + 1) {
+                std::cerr << "Smoke test failed at index: " << i << std::endl;
+                return EXIT_FAILURE;
+            }
+        }
 
         std::cout << "Selected platform: " << result.selection->platform_name
                   << std::endl;
