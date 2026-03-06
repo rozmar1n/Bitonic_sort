@@ -3,3 +3,4 @@
 *.out
 /.cache/clangd/index
 __pycache__/
+artifacts/bench/
