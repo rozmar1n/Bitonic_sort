@@ -4,6 +4,8 @@ namespace bs {
 
 namespace {
 
+constexpr cl_int kPlatformNotFoundKhr = -1001; // CL_PLATFORM_NOT_FOUND_KHR
+
 OpenCLSelection make_selection(const OpenCLPlatformInfo& platform_info,
                                const OpenCLDeviceInfo& device_info)
 {
@@ -24,7 +26,16 @@ OpenCLProbeResult probe_opencl(DevicePreference preference)
 {
     OpenCLProbeResult result;
     std::vector<cl::Platform> platforms;
-    cl::Platform::get(&platforms);
+
+    try {
+        cl::Platform::get(&platforms);
+    } catch (const cl::Error& error) {
+        if (error.err() == kPlatformNotFoundKhr) {
+            return result;
+        }
+        throw;
+    }
+
     result.platforms.reserve(platforms.size());
 
     std::optional<OpenCLSelection> first_gpu = std::nullopt;
@@ -39,7 +50,14 @@ OpenCLProbeResult probe_opencl(DevicePreference preference)
         res_platform.version = platform.getInfo<CL_PLATFORM_VERSION>();
 
         std::vector<cl::Device> devices;
-        platform.getDevices(CL_DEVICE_TYPE_ALL, &devices);
+        try {
+            platform.getDevices(CL_DEVICE_TYPE_ALL, &devices);
+        } catch (const cl::Error& error) {
+            if (error.err() == CL_DEVICE_NOT_FOUND) {
+                continue;
+            }
+            throw;
+        }
 
         if (devices.empty()) {
             continue;
