@@ -8,6 +8,8 @@ jobs:
   build-only:
     name: Build Only (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    env:
+      PROJECT_VCPKG_ROOT: ${{ github.workspace }}/vcpkg
     strategy:
       fail-fast: false
       matrix:
@@ -20,6 +22,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup MSVC environment
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -31,19 +37,39 @@ jobs:
             ocl-icd-opencl-dev \
             opencl-clhpp-headers
 
-      - name: Install OpenCL headers (Windows)
+      - name: Install dependencies (Windows, vcpkg)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          git clone --depth 1 https://github.com/KhronosGroup/OpenCL-Headers.git "$env:RUNNER_TEMP/OpenCL-Headers"
-          New-Item -ItemType Directory -Path "$env:GITHUB_WORKSPACE/include/CL" -Force | Out-Null
-          Copy-Item "$env:RUNNER_TEMP/OpenCL-Headers/CL/*" "$env:GITHUB_WORKSPACE/include/CL/" -Recurse -Force
+          $ErrorActionPreference = "Stop"
 
-          $openclLib = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\Lib" -Recurse -Filter OpenCL.lib | Select-Object -First 1
-          if (-not $openclLib) {
-            throw "OpenCL.lib not found in Windows SDK"
+          function Invoke-WithRetry {
+            param(
+              [scriptblock]$Action,
+              [int]$MaxAttempts = 4,
+              [int]$DelaySeconds = 20
+            )
+
+            for ($Attempt = 1; $Attempt -le $MaxAttempts; $Attempt++) {
+              try {
+                & $Action
+                if ($LASTEXITCODE -ne 0) {
+                  throw "Command exited with code $LASTEXITCODE"
+                }
+                return
+              } catch {
+                if ($Attempt -eq $MaxAttempts) {
+                  throw
+                }
+                Write-Host "Attempt $Attempt failed. Retrying in $DelaySeconds seconds..."
+                Start-Sleep -Seconds $DelaySeconds
+              }
+            }
           }
-          "OPENCL_LIBRARY=$($openclLib.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          git clone --depth 1 https://github.com/microsoft/vcpkg.git "$env:PROJECT_VCPKG_ROOT"
+          Invoke-WithRetry { & "$env:PROJECT_VCPKG_ROOT/bootstrap-vcpkg.bat" -disableMetrics }
+          Invoke-WithRetry { & "$env:PROJECT_VCPKG_ROOT/vcpkg.exe" install opencl:x64-windows }
 
       - name: Configure (Linux)
         if: runner.os == 'Linux'
@@ -55,9 +81,9 @@ jobs:
         shell: pwsh
         run: |
           cmake -S . -B build `
-            -DCMAKE_BUILD_TYPE=Release `
-            -DOpenCL_INCLUDE_DIR="$env:GITHUB_WORKSPACE/include" `
-            -DOpenCL_LIBRARY="$env:OPENCL_LIBRARY"
+            -G "Visual Studio 17 2022" `
+            -A x64 `
+            -DCMAKE_TOOLCHAIN_FILE="$env:PROJECT_VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
 
       - name: Build (Linux)
         if: runner.os == 'Linux'
@@ -68,3 +94,13 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           cmake --build build --config Release
+
+      - name: Run smoke test (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          ctest --test-dir build --output-on-failure -R opencl_smoke_test
+
+      - name: Run smoke test (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          ctest --test-dir build -C Release --output-on-failure -R opencl_smoke_test

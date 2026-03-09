@@ -43,8 +43,9 @@ A CI workflow has been added:
 
 What it does:
 - builds on `ubuntu-latest` and `windows-latest`,
-- verifies project configurability and compilability only (`cmake` configure + build),
-- does not run runtime tests, e2e, or benchmarks in CI.
+- verifies project configurability and compilability (`cmake` configure + build),
+- runs only the smoke runtime test (`opencl_smoke_test`) on both platforms,
+- does not run e2e or benchmarks in CI.
 
 ## Benchmark & plots
 
