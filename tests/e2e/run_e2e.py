@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 import argparse
 import pathlib
+import re
 import subprocess
 import sys
+
+LARGE_CASE_PATTERN = re.compile(r"^large_case_pow_(\d+)\.dat$")
 
 
 def parse_int_tokens(raw: str, label: str) -> list[int]:
@@ -23,6 +26,15 @@ def main() -> int:
         default="build/src/apps/bitonic_sort_cli/bitonic_sort_cli",
     )
     parser.add_argument("--cases-dir", default="tests/e2e/cases")
+    parser.add_argument(
+        "--max-exp",
+        type=int,
+        default=None,
+        help=(
+            "Maximum exponent for large_case_pow_<k>.dat. "
+            "Cases with k > max-exp are skipped."
+        ),
+    )
     args = parser.parse_args()
 
     binary = pathlib.Path(args.binary)
@@ -35,6 +47,13 @@ def main() -> int:
 
     failures = 0
     for dat_path in case_files:
+        if args.max_exp is not None:
+            match = LARGE_CASE_PATTERN.match(dat_path.name)
+            if match is not None and int(match.group(1)) > args.max_exp:
+                rel_dat = dat_path.relative_to(cases_dir)
+                print(f"{rel_dat}: SKIP (exponent > {args.max_exp})")
+                continue
+
         ans_path = dat_path.with_suffix(".ans")
         if not ans_path.exists():
             rel_dat = dat_path.relative_to(cases_dir)

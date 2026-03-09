@@ -50,6 +50,7 @@ Generated charts:
 - `time_vs_n.png`
 - `speedup_vs_n.png`
 - `cpu_gpu_breakdown.png`
+- `time_cpu_vs_gpu_bar.png` (CPU/GPU time bars for `2^10..2^20`)
 
 ## Smoke example (fast local check)
 
