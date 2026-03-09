@@ -9,12 +9,15 @@ import sys
 REQUIRED_COLUMNS = {
     "size",
     "cpu_mean_ns",
+    "cpu_bitonic_mean_ns",
     "gpu_e2e_mean_ns",
     "gpu_kernel_mean_ns",
     "gpu_h2d_mean_ns",
     "gpu_d2h_mean_ns",
     "speedup_e2e",
     "speedup_kernel",
+    "speedup_bitonic_e2e",
+    "speedup_bitonic_kernel",
 }
 SELECTED_EXPONENTS = [10, 12, 14, 16, 18, 20]
 
@@ -58,12 +61,15 @@ def load_summary(path: pathlib.Path) -> list[dict]:
                 {
                     "size": int(row["size"]),
                     "cpu_mean_ns": float(row["cpu_mean_ns"]),
+                    "cpu_bitonic_mean_ns": float(row["cpu_bitonic_mean_ns"]),
                     "gpu_e2e_mean_ns": float(row["gpu_e2e_mean_ns"]),
                     "gpu_kernel_mean_ns": float(row["gpu_kernel_mean_ns"]),
                     "gpu_h2d_mean_ns": float(row["gpu_h2d_mean_ns"]),
                     "gpu_d2h_mean_ns": float(row["gpu_d2h_mean_ns"]),
                     "speedup_e2e": float(row["speedup_e2e"]),
                     "speedup_kernel": float(row["speedup_kernel"]),
+                    "speedup_bitonic_e2e": float(row["speedup_bitonic_e2e"]),
+                    "speedup_bitonic_kernel": float(row["speedup_bitonic_kernel"]),
                 }
             )
 
@@ -216,6 +222,54 @@ def make_selected_time_bar_plot(
     plt.close(fig)
 
 
+def make_selected_time_bar_plot_bitonic(
+    rows: list[dict], out_path: pathlib.Path, title_prefix: str
+) -> None:
+    import matplotlib.pyplot as plt
+
+    selected_sizes = {1 << exponent for exponent in SELECTED_EXPONENTS}
+    selected_rows = [row for row in rows if row["size"] in selected_sizes]
+    if not selected_rows:
+        raise RuntimeError(
+            "No rows for requested sizes (2^10..2^20) in summary CSV"
+        )
+
+    selected_rows.sort(key=lambda row: row["size"])
+    sizes = [row["size"] for row in selected_rows]
+    labels = size_labels(sizes)
+
+    cpu_bitonic_ms = ns_to_ms([row["cpu_bitonic_mean_ns"] for row in selected_rows])
+    gpu_ms = ns_to_ms([row["gpu_e2e_mean_ns"] for row in selected_rows])
+
+    x = list(range(len(sizes)))
+    width = 0.38
+
+    fig, ax = plt.subplots(figsize=(11, 6))
+    ax.bar(
+        [value - width / 2 for value in x],
+        cpu_bitonic_ms,
+        width,
+        label="CPU bitonic (mean)",
+    )
+    ax.bar(
+        [value + width / 2 for value in x],
+        gpu_ms,
+        width,
+        label="GPU bitonic (end-to-end)",
+    )
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels)
+    ax.set_xlabel("Input size")
+    ax.set_ylabel("Time (ms)")
+    ax.set_title(f"{title_prefix}: time_bitonic_cpu_vs_gpu_selected_sizes")
+    ax.grid(True, axis="y", linestyle="--", alpha=0.4)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=150)
+    plt.close(fig)
+
+
 def main() -> int:
     args = parse_args()
     summary_path = pathlib.Path(args.summary_csv)
@@ -235,17 +289,22 @@ def main() -> int:
     speedup_path = out_dir / "speedup_vs_n.png"
     breakdown_path = out_dir / "cpu_gpu_breakdown.png"
     selected_time_bar_path = out_dir / "time_cpu_vs_gpu_bar.png"
+    selected_bitonic_time_bar_path = out_dir / "time_bitonic_cpu_vs_gpu_bar.png"
 
     make_time_plot(rows, time_path, args.title_prefix)
     make_speedup_plot(rows, speedup_path, args.title_prefix)
     make_breakdown_plot(rows, breakdown_path, args.title_prefix)
     make_selected_time_bar_plot(rows, selected_time_bar_path, args.title_prefix)
+    make_selected_time_bar_plot_bitonic(
+        rows, selected_bitonic_time_bar_path, args.title_prefix
+    )
 
     print(f"Summary CSV: {summary_path}")
     print(f"Generated: {time_path}")
     print(f"Generated: {speedup_path}")
     print(f"Generated: {breakdown_path}")
     print(f"Generated: {selected_time_bar_path}")
+    print(f"Generated: {selected_bitonic_time_bar_path}")
     return 0
 
 

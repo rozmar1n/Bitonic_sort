@@ -9,6 +9,7 @@ target_include_directories(bitonic_bench
 
 target_link_libraries(bitonic_bench
     PRIVATE
+        bitonic_cpu
         bitonic_gpu
         opencl_core
 )

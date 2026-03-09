@@ -15,6 +15,7 @@ REQUIRED_KEYS = {
     "warmup",
     "correct",
     "cpu_sort_ns",
+    "cpu_bitonic_ns",
     "gpu_end_to_end_ns",
     "gpu_kernel_ns",
     "gpu_h2d_ns",
@@ -26,16 +27,20 @@ REQUIRED_KEYS = {
 class AggregatedMetrics:
     size: int
     samples: int
-    cpu_mean_ns: float
-    cpu_median_ns: float
+    cpu_std_mean_ns: float
+    cpu_std_median_ns: float
+    cpu_bitonic_mean_ns: float
+    cpu_bitonic_median_ns: float
     gpu_e2e_mean_ns: float
     gpu_e2e_median_ns: float
     gpu_kernel_mean_ns: float
     gpu_kernel_median_ns: float
     gpu_h2d_mean_ns: float
     gpu_d2h_mean_ns: float
-    speedup_e2e: float
-    speedup_kernel: float
+    speedup_std_e2e: float
+    speedup_std_kernel: float
+    speedup_bitonic_e2e: float
+    speedup_bitonic_kernel: float
 
 
 def parse_args() -> argparse.Namespace:
@@ -156,13 +161,15 @@ def aggregate_records(records: list[dict]) -> list[AggregatedMetrics]:
     for size in sorted(grouped):
         bucket = grouped[size]
 
-        cpu = [float(r["cpu_sort_ns"]) for r in bucket]
+        cpu_std = [float(r["cpu_sort_ns"]) for r in bucket]
+        cpu_bitonic = [float(r["cpu_bitonic_ns"]) for r in bucket]
         gpu_e2e = [float(r["gpu_end_to_end_ns"]) for r in bucket]
         gpu_kernel = [float(r["gpu_kernel_ns"]) for r in bucket]
         gpu_h2d = [float(r["gpu_h2d_ns"]) for r in bucket]
         gpu_d2h = [float(r["gpu_d2h_ns"]) for r in bucket]
 
-        cpu_mean = statistics.fmean(cpu)
+        cpu_std_mean = statistics.fmean(cpu_std)
+        cpu_bitonic_mean = statistics.fmean(cpu_bitonic)
         gpu_e2e_mean = statistics.fmean(gpu_e2e)
         gpu_kernel_mean = statistics.fmean(gpu_kernel)
 
@@ -173,16 +180,20 @@ def aggregate_records(records: list[dict]) -> list[AggregatedMetrics]:
             AggregatedMetrics(
                 size=size,
                 samples=len(bucket),
-                cpu_mean_ns=cpu_mean,
-                cpu_median_ns=float(statistics.median(cpu)),
+                cpu_std_mean_ns=cpu_std_mean,
+                cpu_std_median_ns=float(statistics.median(cpu_std)),
+                cpu_bitonic_mean_ns=cpu_bitonic_mean,
+                cpu_bitonic_median_ns=float(statistics.median(cpu_bitonic)),
                 gpu_e2e_mean_ns=gpu_e2e_mean,
                 gpu_e2e_median_ns=float(statistics.median(gpu_e2e)),
                 gpu_kernel_mean_ns=gpu_kernel_mean,
                 gpu_kernel_median_ns=float(statistics.median(gpu_kernel)),
                 gpu_h2d_mean_ns=statistics.fmean(gpu_h2d),
                 gpu_d2h_mean_ns=statistics.fmean(gpu_d2h),
-                speedup_e2e=cpu_mean / gpu_e2e_mean,
-                speedup_kernel=cpu_mean / gpu_kernel_mean,
+                speedup_std_e2e=cpu_std_mean / gpu_e2e_mean,
+                speedup_std_kernel=cpu_std_mean / gpu_kernel_mean,
+                speedup_bitonic_e2e=cpu_bitonic_mean / gpu_e2e_mean,
+                speedup_bitonic_kernel=cpu_bitonic_mean / gpu_kernel_mean,
             )
         )
 
@@ -201,6 +212,10 @@ def write_summary_csv(path: pathlib.Path, rows: list[AggregatedMetrics]) -> None
                 "samples",
                 "cpu_mean_ns",
                 "cpu_median_ns",
+                "cpu_std_mean_ns",
+                "cpu_std_median_ns",
+                "cpu_bitonic_mean_ns",
+                "cpu_bitonic_median_ns",
                 "gpu_e2e_mean_ns",
                 "gpu_e2e_median_ns",
                 "gpu_kernel_mean_ns",
@@ -209,6 +224,10 @@ def write_summary_csv(path: pathlib.Path, rows: list[AggregatedMetrics]) -> None
                 "gpu_d2h_mean_ns",
                 "speedup_e2e",
                 "speedup_kernel",
+                "speedup_std_e2e",
+                "speedup_std_kernel",
+                "speedup_bitonic_e2e",
+                "speedup_bitonic_kernel",
             ]
         )
         for row in rows:
@@ -216,16 +235,24 @@ def write_summary_csv(path: pathlib.Path, rows: list[AggregatedMetrics]) -> None
                 [
                     row.size,
                     row.samples,
-                    f"{row.cpu_mean_ns:.3f}",
-                    f"{row.cpu_median_ns:.3f}",
+                    f"{row.cpu_std_mean_ns:.3f}",
+                    f"{row.cpu_std_median_ns:.3f}",
+                    f"{row.cpu_std_mean_ns:.3f}",
+                    f"{row.cpu_std_median_ns:.3f}",
+                    f"{row.cpu_bitonic_mean_ns:.3f}",
+                    f"{row.cpu_bitonic_median_ns:.3f}",
                     f"{row.gpu_e2e_mean_ns:.3f}",
                     f"{row.gpu_e2e_median_ns:.3f}",
                     f"{row.gpu_kernel_mean_ns:.3f}",
                     f"{row.gpu_kernel_median_ns:.3f}",
                     f"{row.gpu_h2d_mean_ns:.3f}",
                     f"{row.gpu_d2h_mean_ns:.3f}",
-                    f"{row.speedup_e2e:.6f}",
-                    f"{row.speedup_kernel:.6f}",
+                    f"{row.speedup_std_e2e:.6f}",
+                    f"{row.speedup_std_kernel:.6f}",
+                    f"{row.speedup_std_e2e:.6f}",
+                    f"{row.speedup_std_kernel:.6f}",
+                    f"{row.speedup_bitonic_e2e:.6f}",
+                    f"{row.speedup_bitonic_kernel:.6f}",
                 ]
             )
 

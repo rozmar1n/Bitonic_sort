@@ -4,7 +4,9 @@ OpenCL-based Bitonic Sort implementation with:
 - C++ host code (`CL/opencl.hpp`)
 - OpenCL kernel execution on GPU
 - deterministic e2e validation
-- benchmark and plotting pipeline for `std::sort` vs bitonic GPU sort
+- benchmark and plotting pipeline for:
+  - `std::sort` vs bitonic GPU sort
+  - bitonic CPU sort vs bitonic GPU sort
 
 ## Build
 
@@ -71,21 +73,36 @@ Benchmark command:
 ```bash
 python3 bench/run_bench.py \
   --binary build/src/apps/bitonic_bench/bitonic_bench \
-  --min-exp 5 --max-exp 20 \
+  --min-exp 10 --max-exp 20 \
   --seeds 3 --warmup 3 --iters 10
 ```
 
-Summary table (mean timings, GPU end-to-end):
+Summary table: `std::sort` vs bitonic GPU (mean timings, GPU end-to-end):
 
 | N (2^k) | Size | CPU mean, ms | GPU e2e mean, ms | Speedup (CPU/GPU e2e) |
 | --- | ---: | ---: | ---: | ---: |
-| 2^10 | 1,024 | 0.065 | 3.640 | 0.018 |
-| 2^12 | 4,096 | 0.480 | 5.059 | 0.095 |
-| 2^14 | 16,384 | 2.191 | 5.804 | 0.378 |
-| 2^16 | 65,536 | 9.781 | 9.979 | 0.980 |
-| 2^18 | 262,144 | 42.985 | 25.659 | 1.675 |
-| 2^20 | 1,048,576 | 188.727 | 57.765 | 3.267 |
+| 2^10 | 1,024 | 0.412 | 3.494 | 0.118 |
+| 2^12 | 4,096 | 2.007 | 4.750 | 0.423 |
+| 2^14 | 16,384 | 9.035 | 6.643 | 1.360 |
+| 2^16 | 65,536 | 39.794 | 10.364 | 3.840 |
+| 2^18 | 262,144 | 177.244 | 30.606 | 5.791 |
+| 2^20 | 1,048,576 | 784.746 | 63.534 | 12.352 |
 
 CPU vs GPU time bar chart for sizes `2^10, 2^12, 2^14, 2^16, 2^18, 2^20`:
 
 ![CPU vs GPU time bar chart](bench/my_results/time_cpu_vs_gpu_bar.png)
+
+Summary table: bitonic CPU vs bitonic GPU (mean timings, GPU end-to-end):
+
+| N (2^k) | Size | CPU bitonic mean, ms | GPU e2e mean, ms | Speedup (CPU bitonic/GPU e2e) |
+| --- | ---: | ---: | ---: | ---: |
+| 2^10 | 1,024 | 0.802 | 3.494 | 0.230 |
+| 2^12 | 4,096 | 4.564 | 4.750 | 0.961 |
+| 2^14 | 16,384 | 22.732 | 6.643 | 3.422 |
+| 2^16 | 65,536 | 116.004 | 10.364 | 11.193 |
+| 2^18 | 262,144 | 574.805 | 30.606 | 18.781 |
+| 2^20 | 1,048,576 | 2781.800 | 63.534 | 43.784 |
+
+Bitonic CPU vs bitonic GPU time bar chart for sizes `2^10, 2^12, 2^14, 2^16, 2^18, 2^20`:
+
+![Bitonic CPU vs GPU time bar chart](bench/my_results/time_bitonic_cpu_vs_gpu_bar.png)

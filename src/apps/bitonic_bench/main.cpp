@@ -1,3 +1,4 @@
+#include "bitonic_cpu/BitonicSort.hpp"
 #include "bitonic_gpu/BitonicSort.hpp"
 #include "opencl_core/KernelLoader.hpp"
 #include "opencl_core/OpenCLProbe.hpp"
@@ -43,7 +44,10 @@ struct RunMetrics
     int iteration = 0;
     bool warmup = false;
     bool correct = false;
+    bool cpu_bitonic_correct = false;
+    bool gpu_correct = false;
     std::uint64_t cpu_sort_ns = 0;
+    std::uint64_t cpu_bitonic_ns = 0;
     std::uint64_t gpu_end_to_end_ns = 0;
     std::uint64_t gpu_kernel_ns = 0;
     std::uint64_t gpu_h2d_ns = 0;
@@ -215,7 +219,12 @@ void write_jsonl_record(std::ofstream& out, const RunMetrics& record)
         << "\"iteration\":" << record.iteration << ","
         << "\"warmup\":" << (record.warmup ? "true" : "false") << ","
         << "\"correct\":" << (record.correct ? "true" : "false") << ","
+        << "\"cpu_bitonic_correct\":"
+        << (record.cpu_bitonic_correct ? "true" : "false") << ","
+        << "\"gpu_correct\":" << (record.gpu_correct ? "true" : "false")
+        << ","
         << "\"cpu_sort_ns\":" << record.cpu_sort_ns << ","
+        << "\"cpu_bitonic_ns\":" << record.cpu_bitonic_ns << ","
         << "\"gpu_end_to_end_ns\":" << record.gpu_end_to_end_ns << ","
         << "\"gpu_kernel_ns\":" << record.gpu_kernel_ns << ","
         << "\"gpu_h2d_ns\":" << record.gpu_h2d_ns << ","
@@ -283,14 +292,33 @@ int main(int argc, char** argv)
                                 cpu_end - cpu_start)
                                 .count());
 
+                    const auto cpu_bitonic_start =
+                        std::chrono::steady_clock::now();
+                    const std::vector<int> cpu_bitonic_sorted =
+                        bs::bitonic_sort_cpu(input);
+                    const auto cpu_bitonic_end = std::chrono::steady_clock::now();
+                    const std::uint64_t cpu_bitonic_ns =
+                        static_cast<std::uint64_t>(
+                            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                cpu_bitonic_end - cpu_bitonic_start)
+                                .count());
+
                     const bs::BitonicRunResult gpu_result =
                         bs::bitonic_sort_opencl_timed(runtime, program, input);
 
-                    const bool correct = (gpu_result.output == cpu_sorted);
+                    const bool cpu_bitonic_correct =
+                        (cpu_bitonic_sorted == cpu_sorted);
+                    const bool gpu_correct = (gpu_result.output == cpu_sorted);
+                    const bool correct = cpu_bitonic_correct && gpu_correct;
                     if (options.verify && !correct) {
                         std::cerr << "Verification failed"
                                   << " size=" << size << " seed=" << seed
-                                  << " run=" << (run_index + 1) << std::endl;
+                                  << " run=" << (run_index + 1)
+                                  << " cpu_bitonic_correct="
+                                  << (cpu_bitonic_correct ? "true" : "false")
+                                  << " gpu_correct="
+                                  << (gpu_correct ? "true" : "false")
+                                  << std::endl;
                         return EXIT_FAILURE;
                     }
 
@@ -301,7 +329,10 @@ int main(int argc, char** argv)
                         .iteration = run_index + 1,
                         .warmup = warmup,
                         .correct = correct,
+                        .cpu_bitonic_correct = cpu_bitonic_correct,
+                        .gpu_correct = gpu_correct,
                         .cpu_sort_ns = cpu_sort_ns,
+                        .cpu_bitonic_ns = cpu_bitonic_ns,
                         .gpu_end_to_end_ns =
                             gpu_result.timing.gpu_end_to_end_ns,
                         .gpu_kernel_ns = gpu_result.timing.gpu_kernel_ns,
