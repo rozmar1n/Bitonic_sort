@@ -5,6 +5,12 @@ This directory contains scripts for reproducible comparison between:
 - CPU `std::sort`
 - CPU bitonic sort (`bitonic_sort_cpu`)
 
+Important:
+- `bitonic_bench` can benchmark external input arrays from `stdin`:
+  - `bitonic_bench < input.txt` for auto stdin mode (single fast run),
+  - `bitonic_bench --stdin-input --seeds 3 --warmup 3 --iters 10 < input.txt` for full custom benchmark.
+- For stdin-to-stdout sorting (without timing metrics) use `bitonic_sort_cli` / `bitonic_sort_cpu_cli`.
+
 ## Prerequisites
 
 - Built project (`cmake -S . -B build && cmake --build build`)

@@ -9,9 +9,11 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <limits>
 #include <random>
@@ -19,6 +21,12 @@
 #include <string>
 #include <string_view>
 #include <vector>
+
+#if defined(_WIN32)
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
 
 namespace {
 
@@ -34,6 +42,7 @@ struct BenchmarkOptions
     int value_max = 1'000'000;
     std::string jsonl_out = "artifacts/bench/raw_runs.jsonl";
     bool verify = true;
+    bool stdin_input = false;
 };
 
 struct RunMetrics
@@ -111,6 +120,8 @@ BenchmarkOptions parse_args(int argc, char** argv)
                 parse_int_arg("--value-max", require_value("--value-max"));
         } else if (arg == "--jsonl-out") {
             options.jsonl_out = require_value("--jsonl-out");
+        } else if (arg == "--stdin-input") {
+            options.stdin_input = true;
         } else if (arg == "--verify") {
             options.verify = true;
         } else if (arg == "--no-verify") {
@@ -127,6 +138,7 @@ BenchmarkOptions parse_args(int argc, char** argv)
                 << "  --value-min <int>     Minimum generated value\n"
                 << "  --value-max <int>     Maximum generated value\n"
                 << "  --jsonl-out <path>    Output JSONL path\n"
+                << "  --stdin-input         Read input array from stdin for benchmarking\n"
                 << "  --verify              Verify GPU output against std::sort\n"
                 << "  --no-verify           Disable correctness check\n";
             std::exit(EXIT_SUCCESS);
@@ -163,6 +175,68 @@ BenchmarkOptions parse_args(int argc, char** argv)
 std::size_t size_for_exponent(int exponent)
 {
     return static_cast<std::size_t>(1) << exponent;
+}
+
+bool is_power_of_two(std::size_t value)
+{
+    return value > 0 && (value & (value - 1U)) == 0;
+}
+
+std::size_t next_power_of_two(std::size_t value)
+{
+    if (value == 0) {
+        return 1;
+    }
+
+    std::size_t result = 1;
+    while (result < value) {
+        if (result > (std::numeric_limits<std::size_t>::max() / 2U)) {
+            throw std::overflow_error("Input size is too large");
+        }
+        result *= 2U;
+    }
+    return result;
+}
+
+std::vector<int> read_ints_from_stdin()
+{
+    std::vector<int> values;
+    int value = 0;
+    while (std::cin >> value) {
+        values.push_back(value);
+    }
+
+    if (!std::cin.eof()) {
+        throw std::runtime_error("Failed to parse integer from stdin");
+    }
+
+    return values;
+}
+
+std::vector<int> pad_to_power_of_two(const std::vector<int>& input)
+{
+    if (input.empty() || is_power_of_two(input.size())) {
+        return input;
+    }
+
+    const std::size_t padded_size = next_power_of_two(input.size());
+    std::vector<int> padded = input;
+    padded.resize(padded_size, std::numeric_limits<int>::max());
+    return padded;
+}
+
+int exponent_from_power_of_two_size(std::size_t size)
+{
+    if (!is_power_of_two(size)) {
+        throw std::invalid_argument("size must be a power of two");
+    }
+
+    int exponent = 0;
+    while (size > 1) {
+        size >>= 1U;
+        ++exponent;
+    }
+    return exponent;
 }
 
 std::vector<int> generate_input(std::size_t size,
@@ -234,12 +308,107 @@ void write_jsonl_record(std::ofstream& out, const RunMetrics& record)
         << "\"device_name\":\"" << json_escape(record.device_name) << "\"}\n";
 }
 
+bool stdin_is_tty()
+{
+#if defined(_WIN32)
+    return _isatty(_fileno(stdin)) != 0;
+#else
+    return isatty(fileno(stdin)) != 0;
+#endif
+}
+
+
+void print_default_run_hint_if_needed(int argc, const BenchmarkOptions& options)
+{
+    if (argc != 1) {
+        return;
+    }
+
+    std::cout << "[bench] Running default config: min-exp=" << options.min_exp
+              << ", max-exp=" << options.max_exp << ", seeds=" << options.seeds
+              << ", warmup=" << options.warmup << ", iters=" << options.iters
+              << std::endl;
+    std::cout << "[bench] This run can take a long time on large sizes."
+              << std::endl;
+
+}
+
+void print_stdin_mode_banner(std::size_t original_size,
+                             std::size_t working_size,
+                             int effective_seeds,
+                             int effective_warmup,
+                             int effective_iters)
+{
+    std::cout << "[bench] stdin-input mode: input_size=" << original_size
+              << ", working_size=" << working_size << ", seeds="
+              << effective_seeds << ", warmup=" << effective_warmup
+              << ", iters=" << effective_iters << std::endl;
+
+    if (working_size != original_size) {
+        std::cout << "[bench] input was padded to next power-of-two using INT_MAX"
+                  << std::endl;
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv)
 {
     try {
         const BenchmarkOptions options = parse_args(argc, argv);
+
+        const bool auto_stdin_mode = (argc == 1 && !stdin_is_tty());
+        bool use_stdin_mode = options.stdin_input || auto_stdin_mode;
+        std::vector<int> stdin_original_input;
+        std::vector<int> stdin_padded_input;
+        std::vector<int> stdin_expected_sorted;
+
+        int effective_seeds = options.seeds;
+        int effective_warmup = options.warmup;
+        int effective_iters = options.iters;
+
+        if (use_stdin_mode) {
+            stdin_original_input = read_ints_from_stdin();
+            if (stdin_original_input.empty()) {
+                if (options.stdin_input) {
+                    std::cerr << "Error: --stdin-input specified, but stdin is empty"
+                              << std::endl;
+                    return EXIT_FAILURE;
+                }
+
+                use_stdin_mode = false;
+                std::cerr << "[bench] stdin redirected but empty; falling back to "
+                             "synthetic benchmark mode."
+                          << std::endl;
+            } else {
+                stdin_expected_sorted = stdin_original_input;
+                std::sort(stdin_expected_sorted.begin(), stdin_expected_sorted.end());
+                stdin_padded_input = pad_to_power_of_two(stdin_original_input);
+
+                if (auto_stdin_mode && argc == 1) {
+                    effective_seeds = 1;
+                    effective_warmup = 0;
+                    effective_iters = 1;
+                }
+
+                print_stdin_mode_banner(stdin_original_input.size(),
+                                        stdin_padded_input.size(),
+                                        effective_seeds,
+                                        effective_warmup,
+                                        effective_iters);
+            }
+        }
+
+        if (!use_stdin_mode) {
+            print_default_run_hint_if_needed(argc, options);
+        }
+
+        const int runs_per_seed = effective_warmup + effective_iters;
+        const int total_size_points =
+            use_stdin_mode ? 1 : (options.max_exp - options.min_exp + 1);
+        const int total_runs = total_size_points * effective_seeds * runs_per_seed;
+        int completed_runs = 0;
+        const auto bench_start = std::chrono::steady_clock::now();
 
         const bs::OpenCLProbeResult result = bs::probe_opencl();
         if (!result.selection.has_value()) {
@@ -264,23 +433,15 @@ int main(int argc, char** argv)
             return EXIT_FAILURE;
         }
 
-        for (int exponent = options.min_exp; exponent <= options.max_exp;
-             ++exponent) {
-            const std::size_t size = size_for_exponent(exponent);
-            if (size > std::numeric_limits<cl_uint>::max()) {
-                std::cerr << "Size exceeds cl_uint limits: " << size
-                          << std::endl;
-                return EXIT_FAILURE;
-            }
-
-            for (int seed_index = 0; seed_index < options.seeds; ++seed_index) {
-                const int seed = seed_index + 1;
-                const std::vector<int> input = generate_input(
-                    size, seed, options.value_min, options.value_max);
-
-                const int total_runs = options.warmup + options.iters;
-                for (int run_index = 0; run_index < total_runs; ++run_index) {
-                    const bool warmup = run_index < options.warmup;
+        auto run_for_input = [&](const std::vector<int>& input,
+                                 const std::vector<int>& expected_trimmed,
+                                 std::size_t original_size,
+                                 int exponent,
+                                 std::size_t size,
+                                 int seed) -> bool {
+            const int runs_for_seed = effective_warmup + effective_iters;
+            for (int run_index = 0; run_index < runs_for_seed; ++run_index) {
+                    const bool warmup = run_index < effective_warmup;
 
                     std::vector<int> cpu_sorted = input;
                     const auto cpu_start = std::chrono::steady_clock::now();
@@ -306,9 +467,23 @@ int main(int argc, char** argv)
                     const bs::BitonicRunResult gpu_result =
                         bs::bitonic_sort_opencl_timed(runtime, program, input);
 
-                    const bool cpu_bitonic_correct =
-                        (cpu_bitonic_sorted == cpu_sorted);
-                    const bool gpu_correct = (gpu_result.output == cpu_sorted);
+                    bool cpu_bitonic_correct = false;
+                    bool gpu_correct = false;
+
+                    if (original_size == size) {
+                        cpu_bitonic_correct = (cpu_bitonic_sorted == cpu_sorted);
+                        gpu_correct = (gpu_result.output == cpu_sorted);
+                    } else {
+                        std::vector<int> cpu_bitonic_trimmed = cpu_bitonic_sorted;
+                        cpu_bitonic_trimmed.resize(original_size);
+
+                        std::vector<int> gpu_trimmed = gpu_result.output;
+                        gpu_trimmed.resize(original_size);
+
+                        cpu_bitonic_correct = (cpu_bitonic_trimmed == expected_trimmed);
+                        gpu_correct = (gpu_trimmed == expected_trimmed);
+                    }
+
                     const bool correct = cpu_bitonic_correct && gpu_correct;
                     if (options.verify && !correct) {
                         std::cerr << "Verification failed"
@@ -319,7 +494,7 @@ int main(int argc, char** argv)
                                   << " gpu_correct="
                                   << (gpu_correct ? "true" : "false")
                                   << std::endl;
-                        return EXIT_FAILURE;
+                        return false;
                     }
 
                     const RunMetrics record{
@@ -345,7 +520,105 @@ int main(int argc, char** argv)
                     };
 
                     write_jsonl_record(out, record);
+                    ++completed_runs;
+
+            }
+
+            return true;
+        };
+
+        if (use_stdin_mode) {
+            const std::size_t size = stdin_padded_input.size();
+            if (size > std::numeric_limits<cl_uint>::max()) {
+                std::cerr << "Size exceeds cl_uint limits: " << size << std::endl;
+                return EXIT_FAILURE;
+            }
+
+            const int exponent = exponent_from_power_of_two_size(size);
+            std::cout << "[bench] size=2^" << exponent << " (N=" << size
+                      << "): start" << std::endl;
+            const auto size_start = std::chrono::steady_clock::now();
+
+            for (int seed_index = 0; seed_index < effective_seeds; ++seed_index) {
+                const int seed = seed_index + 1;
+                if (!run_for_input(stdin_padded_input,
+                                   stdin_expected_sorted,
+                                   stdin_original_input.size(),
+                                   exponent,
+                                   size,
+                                   seed)) {
+                    return EXIT_FAILURE;
                 }
+
+                const auto now = std::chrono::steady_clock::now();
+                const double elapsed_s =
+                    std::chrono::duration<double>(now - bench_start).count();
+                const double progress_pct =
+                    total_runs > 0
+                        ? (100.0 * static_cast<double>(completed_runs) /
+                           static_cast<double>(total_runs))
+                        : 100.0;
+                std::cout << std::fixed << std::setprecision(1)
+                          << "[bench] progress: " << completed_runs << "/"
+                          << total_runs << " (" << progress_pct
+                          << "%), size=2^" << exponent << ", seed=" << seed
+                          << ", elapsed=" << elapsed_s << "s" << std::endl;
+            }
+
+            const double size_elapsed_s =
+                std::chrono::duration<double>(std::chrono::steady_clock::now() -
+                                              size_start)
+                    .count();
+            std::cout << std::fixed << std::setprecision(2)
+                      << "[bench] size=2^" << exponent
+                      << ": done in " << size_elapsed_s << "s" << std::endl;
+        } else {
+            for (int exponent = options.min_exp; exponent <= options.max_exp;
+                 ++exponent) {
+                const std::size_t size = size_for_exponent(exponent);
+                if (size > std::numeric_limits<cl_uint>::max()) {
+                    std::cerr << "Size exceeds cl_uint limits: " << size
+                              << std::endl;
+                    return EXIT_FAILURE;
+                }
+                std::cout << "[bench] size=2^" << exponent << " (N=" << size
+                          << "): start" << std::endl;
+                const auto size_start = std::chrono::steady_clock::now();
+
+                for (int seed_index = 0; seed_index < effective_seeds; ++seed_index) {
+                    const int seed = seed_index + 1;
+                    const std::vector<int> input = generate_input(
+                        size, seed, options.value_min, options.value_max);
+
+                    if (!run_for_input(input, {}, size, exponent, size, seed)) {
+                        return EXIT_FAILURE;
+                    }
+
+                    const auto now = std::chrono::steady_clock::now();
+                    const double elapsed_s =
+                        std::chrono::duration<double>(now - bench_start)
+                            .count();
+                    const double progress_pct =
+                        total_runs > 0
+                            ? (100.0 * static_cast<double>(completed_runs) /
+                               static_cast<double>(total_runs))
+                            : 100.0;
+                    std::cout << std::fixed << std::setprecision(1)
+                              << "[bench] progress: " << completed_runs
+                              << "/" << total_runs << " (" << progress_pct
+                              << "%), size=2^" << exponent
+                              << ", seed=" << seed
+                              << ", elapsed=" << elapsed_s << "s"
+                              << std::endl;
+                }
+
+                const double size_elapsed_s =
+                    std::chrono::duration<double>(
+                        std::chrono::steady_clock::now() - size_start)
+                        .count();
+                std::cout << std::fixed << std::setprecision(2)
+                          << "[bench] size=2^" << exponent
+                          << ": done in " << size_elapsed_s << "s" << std::endl;
             }
         }
 

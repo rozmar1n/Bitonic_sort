@@ -54,6 +54,12 @@ What it does:
 Benchmark workflow documentation:
 - [bench/README.md](bench/README.md)
 
+Note:
+- `bitonic_bench` can benchmark an external array from `stdin`:
+  - auto mode: `bitonic_bench < input.txt` (single fast run),
+  - explicit mode: `bitonic_bench --stdin-input ... < input.txt` (uses provided benchmark params).
+- Use `bitonic_sort_cli` / `bitonic_sort_cpu_cli` when you need only sorted output (without benchmark metrics).
+
 Quick start:
 
 ```bash
