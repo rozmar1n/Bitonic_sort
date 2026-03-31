@@ -99,19 +99,10 @@ def run_benchmark_binary(args: argparse.Namespace) -> None:
     else:
         cmd.append("--verify")
 
-    print("Running:", " ".join(cmd))
-    completed = subprocess.run(cmd, text=True, capture_output=True)
+    print("Running:", " ".join(cmd), flush=True)
+    completed = subprocess.run(cmd, text=True)
     if completed.returncode != 0:
-        if completed.stdout:
-            print(completed.stdout, file=sys.stderr, end="")
-        if completed.stderr:
-            print(completed.stderr, file=sys.stderr, end="")
         raise RuntimeError(f"Benchmark binary failed with exit code {completed.returncode}")
-
-    if completed.stdout:
-        print(completed.stdout, end="")
-    if completed.stderr:
-        print(completed.stderr, file=sys.stderr, end="")
 
 
 def load_jsonl_records(path: pathlib.Path) -> list[dict]:

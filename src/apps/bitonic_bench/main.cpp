@@ -317,6 +317,67 @@ bool stdin_is_tty()
 #endif
 }
 
+bool stdout_is_tty()
+{
+#if defined(_WIN32)
+    return _isatty(_fileno(stdout)) != 0;
+#else
+    return isatty(fileno(stdout)) != 0;
+#endif
+}
+
+void finish_progress_line_if_needed(bool interactive_progress,
+                                    bool& progress_line_active)
+{
+    if (interactive_progress && progress_line_active) {
+        std::cout << std::endl;
+        progress_line_active = false;
+    }
+}
+
+void render_progress_bar(bool interactive_progress,
+                         bool& progress_line_active,
+                         int completed_runs,
+                         int total_runs,
+                         double elapsed_s,
+                         int exponent,
+                         int seed)
+{
+    if (!interactive_progress || total_runs <= 0) {
+        return;
+    }
+
+    const double progress_ratio =
+        static_cast<double>(completed_runs) / static_cast<double>(total_runs);
+    const double progress_pct = progress_ratio * 100.0;
+    const int remaining_runs = total_runs - completed_runs;
+    const double eta_s =
+        completed_runs > 0
+            ? elapsed_s * static_cast<double>(remaining_runs) /
+                  static_cast<double>(completed_runs)
+            : 0.0;
+
+    constexpr int bar_width = 32;
+    const int filled_width = std::clamp(
+        static_cast<int>(progress_ratio * static_cast<double>(bar_width)),
+        0,
+        bar_width);
+
+    std::cout << '\r' << "[bench] ["
+              << std::string(static_cast<std::size_t>(filled_width), '#')
+              << std::string(static_cast<std::size_t>(bar_width - filled_width),
+                             '-')
+              << "] " << std::fixed << std::setprecision(1)
+              << std::setw(5) << progress_pct << "% " << completed_runs << "/"
+              << total_runs << " eta=" << eta_s << "s"
+              << " size=2^" << exponent << " seed=" << seed << std::flush;
+
+    progress_line_active = true;
+    if (completed_runs >= total_runs) {
+        std::cout << std::endl;
+        progress_line_active = false;
+    }
+}
 
 void print_default_run_hint_if_needed(int argc, const BenchmarkOptions& options)
 {
@@ -409,6 +470,8 @@ int main(int argc, char** argv)
         const int total_runs = total_size_points * effective_seeds * runs_per_seed;
         int completed_runs = 0;
         const auto bench_start = std::chrono::steady_clock::now();
+        const bool interactive_progress = stdout_is_tty();
+        bool progress_line_active = false;
 
         const bs::OpenCLProbeResult result = bs::probe_opencl();
         if (!result.selection.has_value()) {
@@ -522,6 +585,16 @@ int main(int argc, char** argv)
                     write_jsonl_record(out, record);
                     ++completed_runs;
 
+                    const auto now = std::chrono::steady_clock::now();
+                    const double elapsed_s =
+                        std::chrono::duration<double>(now - bench_start).count();
+                    render_progress_bar(interactive_progress,
+                                        progress_line_active,
+                                        completed_runs,
+                                        total_runs,
+                                        elapsed_s,
+                                        exponent,
+                                        seed);
             }
 
             return true;
@@ -535,6 +608,8 @@ int main(int argc, char** argv)
             }
 
             const int exponent = exponent_from_power_of_two_size(size);
+            finish_progress_line_if_needed(interactive_progress,
+                                           progress_line_active);
             std::cout << "[bench] size=2^" << exponent << " (N=" << size
                       << "): start" << std::endl;
             const auto size_start = std::chrono::steady_clock::now();
@@ -550,25 +625,29 @@ int main(int argc, char** argv)
                     return EXIT_FAILURE;
                 }
 
-                const auto now = std::chrono::steady_clock::now();
-                const double elapsed_s =
-                    std::chrono::duration<double>(now - bench_start).count();
-                const double progress_pct =
-                    total_runs > 0
-                        ? (100.0 * static_cast<double>(completed_runs) /
-                           static_cast<double>(total_runs))
-                        : 100.0;
-                std::cout << std::fixed << std::setprecision(1)
-                          << "[bench] progress: " << completed_runs << "/"
-                          << total_runs << " (" << progress_pct
-                          << "%), size=2^" << exponent << ", seed=" << seed
-                          << ", elapsed=" << elapsed_s << "s" << std::endl;
+                if (!interactive_progress) {
+                    const auto now = std::chrono::steady_clock::now();
+                    const double elapsed_s =
+                        std::chrono::duration<double>(now - bench_start).count();
+                    const double progress_pct =
+                        total_runs > 0
+                            ? (100.0 * static_cast<double>(completed_runs) /
+                               static_cast<double>(total_runs))
+                            : 100.0;
+                    std::cout << std::fixed << std::setprecision(1)
+                              << "[bench] progress: " << completed_runs << "/"
+                              << total_runs << " (" << progress_pct
+                              << "%), size=2^" << exponent << ", seed=" << seed
+                              << ", elapsed=" << elapsed_s << "s" << std::endl;
+                }
             }
 
             const double size_elapsed_s =
                 std::chrono::duration<double>(std::chrono::steady_clock::now() -
                                               size_start)
                     .count();
+            finish_progress_line_if_needed(interactive_progress,
+                                           progress_line_active);
             std::cout << std::fixed << std::setprecision(2)
                       << "[bench] size=2^" << exponent
                       << ": done in " << size_elapsed_s << "s" << std::endl;
@@ -581,6 +660,9 @@ int main(int argc, char** argv)
                               << std::endl;
                     return EXIT_FAILURE;
                 }
+
+                finish_progress_line_if_needed(interactive_progress,
+                                               progress_line_active);
                 std::cout << "[bench] size=2^" << exponent << " (N=" << size
                           << "): start" << std::endl;
                 const auto size_start = std::chrono::steady_clock::now();
@@ -594,34 +676,39 @@ int main(int argc, char** argv)
                         return EXIT_FAILURE;
                     }
 
-                    const auto now = std::chrono::steady_clock::now();
-                    const double elapsed_s =
-                        std::chrono::duration<double>(now - bench_start)
-                            .count();
-                    const double progress_pct =
-                        total_runs > 0
-                            ? (100.0 * static_cast<double>(completed_runs) /
-                               static_cast<double>(total_runs))
-                            : 100.0;
-                    std::cout << std::fixed << std::setprecision(1)
-                              << "[bench] progress: " << completed_runs
-                              << "/" << total_runs << " (" << progress_pct
-                              << "%), size=2^" << exponent
-                              << ", seed=" << seed
-                              << ", elapsed=" << elapsed_s << "s"
-                              << std::endl;
+                    if (!interactive_progress) {
+                        const auto now = std::chrono::steady_clock::now();
+                        const double elapsed_s =
+                            std::chrono::duration<double>(now - bench_start)
+                                .count();
+                        const double progress_pct =
+                            total_runs > 0
+                                ? (100.0 * static_cast<double>(completed_runs) /
+                                   static_cast<double>(total_runs))
+                                : 100.0;
+                        std::cout << std::fixed << std::setprecision(1)
+                                  << "[bench] progress: " << completed_runs
+                                  << "/" << total_runs << " (" << progress_pct
+                                  << "%), size=2^" << exponent
+                                  << ", seed=" << seed
+                                  << ", elapsed=" << elapsed_s << "s"
+                                  << std::endl;
+                    }
                 }
 
                 const double size_elapsed_s =
                     std::chrono::duration<double>(
                         std::chrono::steady_clock::now() - size_start)
                         .count();
+                finish_progress_line_if_needed(interactive_progress,
+                                               progress_line_active);
                 std::cout << std::fixed << std::setprecision(2)
                           << "[bench] size=2^" << exponent
                           << ": done in " << size_elapsed_s << "s" << std::endl;
             }
         }
 
+        finish_progress_line_if_needed(interactive_progress, progress_line_active);
         std::cout << "Benchmark completed. JSONL output: " << jsonl_path
                   << std::endl;
         return EXIT_SUCCESS;

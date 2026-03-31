@@ -10,6 +10,7 @@ Important:
   - `bitonic_bench < input.txt` for auto stdin mode (single fast run),
   - `bitonic_bench --stdin-input --seeds 3 --warmup 3 --iters 10 < input.txt` for full custom benchmark.
 - For stdin-to-stdout sorting (without timing metrics) use `bitonic_sort_cli` / `bitonic_sort_cpu_cli`.
+- In interactive terminal mode, `bitonic_bench` shows a live progress bar with percent and ETA.
 
 ## Prerequisites
 
